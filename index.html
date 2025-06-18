@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Галерея Анимации</title>
+    <style>
+      /* --- Общие стили и сброс --- */
+      :root {
+        --grid-gap: 15px;
+        --background-color: #1a1a1a;
+        --lightbox-bg: rgba(0, 0, 0, 0.9);
+        --nav-button-color: rgba(255, 255, 255, 0.7);
+        --nav-button-hover-color: white;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+        background-color: var(--background-color);
+        color: white;
+        overflow-x: hidden;
+      }
+
+      /* --- Сетка галереи --- */
+      .gallery-container {
+        display: grid;
+        gap: var(--grid-gap);
+        padding: var(--grid-gap);
+        /* Адаптивные колонки */
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      }
+
+      .video-item {
+        position: relative;
+        cursor: pointer;
+        overflow: hidden;
+        border-radius: 8px;
+        background-color: #333;
+        /* Сохраняем пропорции 16:9 для предзагрузки */
+        aspect-ratio: 16 / 9;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+      }
+
+      .video-item:hover {
+        transform: scale(1.03);
+        box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+      }
+
+      .video-item video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover; /* Видео заполняет контейнер без искажений */
+        display: block;
+      }
+
+      /* --- Лайтбокс (полноэкранный просмотр) --- */
+      .lightbox {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: var(--lightbox-bg);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+      }
+
+      .lightbox.active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .lightbox-content {
+        position: relative;
+        width: 90%;
+        height: 90%;
+        max-width: 1600px;
+        max-height: 90vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .lightbox-video {
+        max-width: 100%;
+        max-height: 100%;
+        border-radius: 4px;
+      }
+
+      /* --- Кнопки навигации и закрытия --- */
+      .close-btn,
+      .nav-btn {
+        position: absolute;
+        color: var(--nav-button-color);
+        font-size: 3em;
+        cursor: pointer;
+        user-select: none; /* Запрещаем выделение текста кнопок */
+        transition: color 0.2s ease;
+        z-index: 1001;
+      }
+
+      .close-btn:hover,
+      .nav-btn:hover {
+        color: var(--nav-button-hover-color);
+      }
+
+      .close-btn {
+        top: 15px;
+        right: 25px;
+        font-size: 2.5em;
+        line-height: 1;
+      }
+
+      .nav-btn {
+        top: 50%;
+        transform: translateY(-50%);
+        padding: 0 20px;
+      }
+
+      .prev-btn {
+        left: 0;
+      }
+
+      .next-btn {
+        right: 0;
+      }
+
+      /* Адаптивность для мобильных устройств */
+      @media (max-width: 768px) {
+        .nav-btn {
+          font-size: 2em;
+          padding: 0 10px;
+        }
+        .close-btn {
+          font-size: 2em;
+          top: 10px;
+          right: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Контейнер для сетки с видео -->
+    <div id="gallery-container" class="gallery-container"></div>
+
+    <!-- Лайтбокс для полноэкранного просмотра (изначально скрыт) -->
+    <div id="lightbox" class="lightbox">
+      <span id="close-btn" class="close-btn">×</span>
+      <div class="lightbox-content">
+        <span id="prev-btn" class="nav-btn prev-btn">❮</span>
+        <!-- Видео в лайтбоксе будет вставлено сюда через JS -->
+        <span id="next-btn" class="nav-btn next-btn">❯</span>
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        // =================================================================
+        //      ВАЖНО: Замените пути на ваши видеофайлы
+        // =================================================================
+        const videoFiles = [
+          "animation.mp4",
+          "animation1.mp4",
+          "animation2.mp4",
+          "animation3.mp4",
+          "animation4.mp4",
+          // ... добавьте столько видео, сколько нужно
+        ];
+
+        const galleryContainer = document.getElementById("gallery-container");
+        const lightbox = document.getElementById("lightbox");
+        const lightboxContent = lightbox.querySelector(".lightbox-content");
+        const closeBtn = document.getElementById("close-btn");
+        const prevBtn = document.getElementById("prev-btn");
+        const nextBtn = document.getElementById("next-btn");
+
+        let currentVideoIndex = 0;
+        let lightboxVideoElement = null;
+
+        // 1. Создание сетки с превью видео
+        videoFiles.forEach((src, index) => {
+          const videoItem = document.createElement("div");
+          videoItem.className = "video-item";
+          videoItem.dataset.index = index;
+
+          const video = document.createElement("video");
+          video.src = src;
+          video.muted = true; // Автоплей работает только с выключенным звуком
+          video.loop = true;
+          video.playsInline = true; // Важно для проигрывания в iOS
+
+          // Ленивая загрузка и автоплей при наведении
+          videoItem.addEventListener("mouseenter", () => video.play());
+          videoItem.addEventListener("mouseleave", () => video.pause());
+
+          videoItem.appendChild(video);
+          galleryContainer.appendChild(videoItem);
+
+          // Добавляем обработчик клика для открытия лайтбокса
+          videoItem.addEventListener("click", () => {
+            openLightbox(index);
+          });
+        });
+
+        // 2. Функциональность лайтбокса
+        function openLightbox(index) {
+          currentVideoIndex = parseInt(index);
+          createLightboxVideo();
+          showVideoAtIndex(currentVideoIndex);
+          lightbox.classList.add("active");
+          document.body.style.overflow = "hidden"; // Запрещаем прокрутку фона
+        }
+
+        function closeLightbox() {
+          lightbox.classList.remove("active");
+          document.body.style.overflow = ""; // Возвращаем прокрутку
+          // Удаляем видеоэлемент, чтобы остановить воспроизведение и освободить ресурсы
+          if (lightboxVideoElement) {
+            lightboxVideoElement.remove();
+            lightboxVideoElement = null;
+          }
+        }
+
+        function createLightboxVideo() {
+          if (lightboxVideoElement) return; // Создаем только если его нет
+
+          lightboxVideoElement = document.createElement("video");
+          lightboxVideoElement.className = "lightbox-video";
+          lightboxVideoElement.controls = true;
+          lightboxVideoElement.autoplay = true;
+          lightboxVideoElement.loop = true;
+          // Вставляем видео между кнопками навигации
+          lightboxContent.insertBefore(lightboxVideoElement, nextBtn);
+        }
+
+        function showVideoAtIndex(index) {
+          lightboxVideoElement.src = videoFiles[index];
+          lightboxVideoElement.play();
+        }
+
+        function showNextVideo() {
+          currentVideoIndex = (currentVideoIndex + 1) % videoFiles.length;
+          showVideoAtIndex(currentVideoIndex);
+        }
+
+        function showPrevVideo() {
+          currentVideoIndex =
+            (currentVideoIndex - 1 + videoFiles.length) % videoFiles.length;
+          showVideoAtIndex(currentVideoIndex);
+        }
+
+        // 3. Обработчики событий
+        closeBtn.addEventListener("click", closeLightbox);
+        lightbox.addEventListener("click", (e) => {
+          // Закрываем по клику на фон, но не на само видео или кнопки
+          if (e.target === lightbox) {
+            closeLightbox();
+          }
+        });
+        nextBtn.addEventListener("click", showNextVideo);
+        prevBtn.addEventListener("click", showPrevVideo);
+
+        // Навигация с помощью клавиш клавиатуры
+        document.addEventListener("keydown", (e) => {
+          if (!lightbox.classList.contains("active")) return;
+          if (e.key === "ArrowRight") showNextVideo();
+          if (e.key === "ArrowLeft") showPrevVideo();
+          if (e.key === "Escape") closeLightbox();
+        });
+
+        // 4. Поддержка свайпов на мобильных устройствах
+        let touchStartX = 0;
+        let touchEndX = 0;
+
+        lightbox.addEventListener(
+          "touchstart",
+          (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+          },
+          { passive: true }
+        );
+
+        lightbox.addEventListener("touchend", (e) => {
+          touchEndX = e.changedTouches[0].screenX;
+          handleSwipe();
+        });
+
+        function handleSwipe() {
+          const swipeThreshold = 50; // Минимальная дистанция свайпа в пикселях
+          if (touchEndX < touchStartX - swipeThreshold) {
+            showNextVideo(); // Свайп влево
+          }
+          if (touchEndX > touchStartX + swipeThreshold) {
+            showPrevVideo(); // Свайп вправо
+          }
+        }
+      });
+    </script>
+  </body>
+</html>
