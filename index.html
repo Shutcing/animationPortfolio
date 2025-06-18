@@ -199,6 +199,7 @@
           video.src = src;
           video.muted = true; // Автоплей работает только с выключенным звуком
           video.loop = true;
+          video.poster = src.replace("mp4", "png");
           video.playsInline = true; // Важно для проигрывания в iOS
 
           // Ленивая загрузка и автоплей при наведении
